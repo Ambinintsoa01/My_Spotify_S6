@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: mp3-pipeline
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    virtual-host: /
+
+# Configuration du pipeline MP3
+mp3:
+  pipeline:
+    # Répertoire surveillé pour les fichiers .mp3
+    inbox-directory: ${MP3_INBOX_DIR:./mp3-inbox}
+
+    # Intervalle de scan en minutes
+    scan-interval-minutes: ${MP3_SCAN_INTERVAL:1}
+
+    # URL de l'API de destination
+    api-url: ${MP3_API_URL:http://localhost:8080/api/upload}
+
+    # Timeout HTTP en secondes
+    http-timeout-seconds: ${MP3_HTTP_TIMEOUT:30}
+
+# Logging
+logging:
+  level:
+    com.mp3pipeline: INFO
+    org.springframework.amqp: WARN
+  file:
+    name: ${LOG_FILE:./logs/mp3-pipeline.log}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file:    "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

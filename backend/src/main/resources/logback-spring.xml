@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Lecture des propriétés Spring Boot -->
+    <springProperty scope="context" name="LOG_FILE"  source="logging.file.name"  defaultValue="./logs/mp3-pipeline.log"/>
+    <springProperty scope="context" name="APP_NAME"  source="spring.application.name" defaultValue="mp3-pipeline"/>
+
+    <!-- ── Pattern commun ──────────────────────────────────────────────────── -->
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-40logger{40} - %msg%n"/>
+
+    <!-- ── Appender CONSOLE ────────────────────────────────────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ── Appender FICHIER (rolling daily) ───────────────────────────────── -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Archive journalière : mp3-pipeline.log.2025-01-15.gz -->
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.gz</fileNamePattern>
+            <!-- Conserve 30 jours d'historique -->
+            <maxHistory>30</maxHistory>
+            <!-- Taille totale max des archives -->
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ── Appender ASYNC (pour ne pas bloquer les threads métier) ─────────── -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- ── Loggers applicatifs ────────────────────────────────────────────── -->
+    <logger name="com.mp3pipeline.watcher"   level="INFO"  additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+
+    <logger name="com.mp3pipeline.extractor" level="INFO"  additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+
+    <logger name="com.mp3pipeline.sender"    level="INFO"  additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+
+    <logger name="com.mp3pipeline.cleaner"   level="INFO"  additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </logger>
+
+    <!-- Silence les bibliothèques tiers trop verbeux -->
+    <logger name="org.springframework.amqp"  level="WARN"/>
+    <logger name="org.springframework.web"   level="WARN"/>
+    <logger name="org.jaudiotagger"          level="WARN"/>
+    <logger name="com.rabbitmq"              level="WARN"/>
+
+    <!-- ── Logger racine ─────────────────────────────────────────────────── -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </root>
+
+</configuration>
