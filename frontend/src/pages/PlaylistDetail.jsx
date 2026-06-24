@@ -211,8 +211,19 @@ export default function PlaylistDetail({ id, navigate }) {
   };
 
   const handlePlayPiste = (index) => {
-    if (!playlist || !playlist.tracks.length) return;
-    const listFlat = playlist.tracks.map(t => t.mp3Metadata);
+    if (!playlist || !playlist.tracks?.length) return;
+
+    // On transforme la liste des pistes pour y ajouter l'URL d'écoute réelle
+    const listFlat = playlist.tracks.map(t => {
+      const metadata = t.mp3Metadata || {};
+      const streamUrl = `http://localhost:8080/api/mp3s/download/${metadata.id}`;
+      return {
+        ...metadata,
+        url: streamUrl, // Au cas où ton PlayerContext utilise 'url'
+        src: streamUrl  // Au cas où ton PlayerContext utilise 'src'
+      };
+    });
+
     play(listFlat, index);
   };
 

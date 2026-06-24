@@ -135,6 +135,23 @@ export default function Mp3Library() {
   const [toast, setToast] = useState(null);
   const [hoverId, setHoverId] = useState(null);
 
+  const handlePlaySong = (index) => {
+    if (!mp3s || !mp3s.length) return;
+
+    // On crée la liste formatée avec les URL réelles de streaming
+    const formattedMp3s = mp3s.map(m => {
+      const streamUrl = `http://localhost:8080/api/mp3s/download/${m.id}`;
+      return {
+        ...m,
+        url: streamUrl,
+        src: streamUrl
+      };
+    });
+
+    // On passe la liste formatée et l'index au contexte globale
+    play(formattedMp3s, index);
+  };
+
   // Charger la liste des MP3 depuis l'API MySQL du Backend
   const fetchMp3s = async () => {
     try {
@@ -143,7 +160,7 @@ export default function Mp3Library() {
       if (res.ok) {
         const data = await res.json();
         setMp3s(data);
-        console.log("[API] MP3s récupérés :", data);
+        // console.log("[API] MP3s récupérés :", data);
       } else {
         setToast({ message: "Erreur lors de la récupération des MP3", type: "error" });
       }
@@ -249,7 +266,7 @@ export default function Mp3Library() {
 
               <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
                 {hoverId === m.id
-                  ? <button onClick={() => play(filtered, idx)} style={{ background: "none", color: "var(--violet-light)", fontSize: 14 }}>▶</button>
+                  ? <button onClick={() => handlePlaySong(idx)} style={{ background: "none", color: "var(--violet-light)", fontSize: 14 }}>▶</button>
                   : idx + 1}
               </span>
 
