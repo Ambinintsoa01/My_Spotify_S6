@@ -42,7 +42,7 @@ mp3:
     api-url: ${MP3_API_URL:http://localhost:8080/api/upload}
 
     # Timeout HTTP en secondes
-    http-timeout-seconds: ${MP3_HTTP_TIMEOUT:30}
+    http-timeout-seconds: ${MP3_HTTP_TIMEOUT:10}
 
 # Logging
 logging:
