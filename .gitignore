@@ -2,3 +2,4 @@
 backend/startup.md
 backend/logs/mp3-pipeline.log
 /frontend/node_modules
+/.idea
