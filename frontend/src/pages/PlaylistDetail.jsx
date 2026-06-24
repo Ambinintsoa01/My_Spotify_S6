@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Btn, Badge, Modal, Toast, Empty, Spinner } from "../components/ui";
 import { formatDuration } from "../hooks/useMockData";
 import { usePlayer } from "../context/PlayerContext";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 function DraggableRow({ track, idx, onPlay, onRemove, dragState, onDragStart, onDragEnter, onDragEnd, isPlaying }) {
   const [hov, setHov] = useState(false);
@@ -162,6 +164,7 @@ export default function PlaylistDetail({ id, navigate }) {
   const [toast, setToast] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [zipping, setZipping] = useState(false); // État pour le loader du ZIP
 
   const [dragState, setDragState] = useState({ draggingIdx: null, overIdx: null });
   const dragItem = useRef(null);
@@ -249,6 +252,49 @@ export default function PlaylistDetail({ id, navigate }) {
     }
   };
 
+  // ── LOGIQUE EXPORT ZIP ──
+  const handleDownloadZip = async () => {
+    if (!playlist || !playlist.tracks?.length) return;
+    setZipping(true);
+    setToast({ message: "Préparation et compression de l'archive ZIP...", type: "info" });
+
+    const zip = new JSZip();
+
+    try {
+      // On boucle sur chaque piste pour la télécharger en binaire (blob)
+      for (let i = 0; i < playlist.tracks.length; i++) {
+        const metadata = playlist.tracks[i].mp3Metadata;
+        // Remplace par la bonne route statique ou d'accès à tes fichiers mp3 si nécessaire
+        const fileUrl = `http://localhost:8080/api/mp3s/download/${metadata.id}`;
+
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error(`Échec du téléchargement de ${metadata.fileName}`);
+
+        const blob = await response.blob();
+
+        // Nommage du fichier dans le ZIP avec index pour garder l'ordre (ex: 01_Titre.mp3)
+        const paddedIndex = String(i + 1).padStart(2, "0");
+        const cleanTitle = (metadata.title || metadata.fileName).replace(/[/\\?%*:|"<>. ]/g, "_");
+        const fileNameInZip = `${paddedIndex}_${cleanTitle}.mp3`;
+
+        zip.file(fileNameInZip, blob);
+      }
+
+      // Génération de l'archive
+      const content = await zip.generateAsync({ type: "blob" });
+      const archiveName = `${playlist.name.replace(/[/\\?%*:|"<>. ]/g, "_")}.zip`;
+
+      // Déclenchement du téléchargement navigateur
+      saveAs(content, archiveName);
+      setToast({ message: "Téléchargement du ZIP démarré !", type: "success" });
+    } catch (error) {
+      console.error(error);
+      setToast({ message: "Erreur lors de la création de l'archive ZIP", type: "error" });
+    } finally {
+      setZipping(false);
+    }
+  };
+
   const handleDragStart = (idx) => {
     dragItem.current = idx;
     setDragState(prev => ({ ...prev, draggingIdx: idx }));
@@ -308,7 +354,10 @@ export default function PlaylistDetail({ id, navigate }) {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <Btn variant="secondary" onClick={() => handlePlayPiste(0)} disabled={!playlist.tracks?.length}>Lire</Btn>
+          <Btn variant="primary" onClick={() => handlePlayPiste(0)} disabled={!playlist.tracks?.length}>▶ Lire la sélection</Btn>
+          <Btn variant="secondary" onClick={handleDownloadZip} disabled={!playlist.tracks?.length || zipping} icon={zipping ? <Spinner size={14} /> : null}>
+            {zipping ? "Compression..." : "📥 Télécharger (ZIP)"}
+          </Btn>
           <Btn variant="secondary" onClick={() => setShowAdd(true)}>Ajouter des titres</Btn>
           <Btn variant="danger" onClick={() => setShowDeleteConfirm(true)}>Supprimer</Btn>
         </div>
@@ -353,7 +402,7 @@ export default function PlaylistDetail({ id, navigate }) {
           <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", background: "var(--bg-elevated)", borderTop: "1px solid var(--border)" }}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Glissez les pistes pour réorganiser l'ordre</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Glissez les pistes pour réouvrir l'ordre</span>
             </div>
             <span style={{ fontSize: 12, color: "var(--text-secondary)", fontFamily: "monospace" }}>
               {playlist.tracks.length} pistes · {formatDuration(totalSecs)}
