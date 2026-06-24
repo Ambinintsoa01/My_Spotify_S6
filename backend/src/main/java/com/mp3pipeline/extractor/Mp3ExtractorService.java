@@ -3,11 +3,9 @@ package com.mp3pipeline.extractor;
 import com.mp3pipeline.config.RabbitMQConfig;
 import com.mp3pipeline.messaging.Mp3FileMessage;
 import com.mp3pipeline.messaging.Mp3MetadataMessage;
-import org.jaudiotagger.audio.AudioFile;
-import org.jaudiotagger.audio.AudioFileIO;
-import org.jaudiotagger.audio.AudioHeader;
-import org.jaudiotagger.tag.FieldKey;
-import org.jaudiotagger.tag.Tag;
+import com.mpatric.mp3agic.ID3v1;
+import com.mpatric.mp3agic.ID3v2;
+import com.mpatric.mp3agic.Mp3File;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -20,18 +18,15 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.logging.Level;
 
 /**
  * ══════════════════════════════════════════════════════
- *  PROGRAMME 2 — Extractor
+ * PROGRAMME 2 — Extractor (Version Mp3Agic)
  * ══════════════════════════════════════════════════════
  * Consomme les messages de {@code mp3.watcher.to.extractor}.
  * Pour chaque fichier .mp3 reçu :
- *   1. Extrait toutes les métadonnées audio (titre, artiste, album,
- *      durée, bitrate, format, taille…)
- *   2. Publie un {@link Mp3MetadataMessage} dans
- *      {@code mp3.extractor.to.sender} pour le Programme 3.
+ * 1. Extrait toutes les métadonnées audio (titre, artiste, album, durée…)
+ * 2. Publie un {@link Mp3MetadataMessage} pour le Programme 3.
  */
 @Service
 public class Mp3ExtractorService {
@@ -43,8 +38,6 @@ public class Mp3ExtractorService {
 
     public Mp3ExtractorService(RabbitTemplate rabbitTemplate) {
         this.rabbitTemplate = rabbitTemplate;
-        // Silence les logs verbeux de jaudiotagger
-        java.util.logging.Logger.getLogger("org.jaudiotagger").setLevel(Level.WARNING);
     }
 
     /**
@@ -66,13 +59,14 @@ public class Mp3ExtractorService {
             publishToSender(message, metadata);
 
         } catch (Exception e) {
+            now = LocalDateTime.now().format(FMT);
             log.error("[EXTRACTOR] [{}] Erreur lors de l'extraction des métadonnées de '{}' : {}",
                     now, message.getFileName(), e.getMessage(), e);
         }
     }
 
     /**
-     * Extrait les métadonnées d'un fichier .mp3 via jaudiotagger.
+     * Extrait les métadonnées d'un fichier .mp3 via mp3agic.
      * Retourne une Map triée clé/valeur (String → String).
      */
     public Map<String, String> extractMetadata(String filePath) throws Exception {
@@ -88,38 +82,39 @@ public class Mp3ExtractorService {
         Map<String, String> metadata = new LinkedHashMap<>();
 
         // ── Informations système du fichier ───────────────────────────────────
-        metadata.put("file_name",   file.getName());
-        metadata.put("file_path",   file.getAbsolutePath());
+        metadata.put("file_name", file.getName());
+        metadata.put("file_path", file.getAbsolutePath());
         metadata.put("file_size_bytes", String.valueOf(file.length()));
 
-        // ── Informations audio (header) ───────────────────────────────────────
-        AudioFile audioFile = AudioFileIO.read(file);
-        AudioHeader header  = audioFile.getAudioHeader();
+        // ── Informations audio via Mp3File ────────────────────────────────────
+        Mp3File mp3File = new Mp3File(filePath);
 
-        metadata.put("audio_format",          safeGet(() -> header.getFormat()));
-        metadata.put("audio_encoding",        safeGet(() -> header.getEncodingType()));
-        metadata.put("audio_bitrate",         safeGet(() -> String.valueOf(header.getBitRateAsNumber())));
-        metadata.put("audio_sample_rate",     safeGet(() -> header.getSampleRate()));
-        metadata.put("audio_channels",        safeGet(() -> header.getChannels()));
-        metadata.put("audio_duration_secs",   safeGet(() -> String.valueOf(header.getTrackLength())));
-        metadata.put("audio_is_vbr",          safeGet(() -> String.valueOf(header.isVariableBitRate())));
-        metadata.put("audio_bits_per_sample", safeGet(() -> String.valueOf(header.getBitsPerSample())));
+        metadata.put("audio_bitrate", String.valueOf(mp3File.getBitrate()));
+        metadata.put("audio_sample_rate", String.valueOf(mp3File.getSampleRate()));
+        metadata.put("audio_duration_secs", String.valueOf(mp3File.getLengthInSeconds()));
+        metadata.put("audio_is_vbr", String.valueOf(mp3File.isVbr()));
 
-        // ── Tags ID3 (titre, artiste, album…) ────────────────────────────────
-        Tag tag = audioFile.getTag();
-        if (tag != null) {
-            metadata.put("tag_title",        safeGet(() -> tag.getFirst(FieldKey.TITLE)));
-            metadata.put("tag_artist",       safeGet(() -> tag.getFirst(FieldKey.ARTIST)));
-            metadata.put("tag_album",        safeGet(() -> tag.getFirst(FieldKey.ALBUM)));
-            metadata.put("tag_album_artist", safeGet(() -> tag.getFirst(FieldKey.ALBUM_ARTIST)));
-            metadata.put("tag_year",         safeGet(() -> tag.getFirst(FieldKey.YEAR)));
-            metadata.put("tag_genre",        safeGet(() -> tag.getFirst(FieldKey.GENRE)));
-            metadata.put("tag_track",        safeGet(() -> tag.getFirst(FieldKey.TRACK)));
-            metadata.put("tag_comment",      safeGet(() -> tag.getFirst(FieldKey.COMMENT)));
-            metadata.put("tag_composer",     safeGet(() -> tag.getFirst(FieldKey.COMPOSER)));
-            metadata.put("tag_lyrics",       safeGet(() -> tag.getFirst(FieldKey.LYRICS)));
-            metadata.put("tag_language",     safeGet(() -> tag.getFirst(FieldKey.LANGUAGE)));
-            metadata.put("tag_bpm",          safeGet(() -> tag.getFirst(FieldKey.BPM)));
+        // ── Tags ID3 (Priorité ID3v2, fallback sur ID3v1) ─────────────────────
+        if (mp3File.hasId3v2Tag()) {
+            ID3v2 id3v2 = mp3File.getId3v2Tag();
+            metadata.put("tag_title", safeTrim(id3v2.getTitle()));
+            metadata.put("tag_artist", safeTrim(id3v2.getArtist()));
+            metadata.put("tag_album", safeTrim(id3v2.getAlbum()));
+            metadata.put("tag_year", safeTrim(id3v2.getYear()));
+            metadata.put("tag_genre", safeTrim(id3v2.getGenreDescription()));
+            metadata.put("tag_track", safeTrim(id3v2.getTrack()));
+            metadata.put("tag_comment", safeTrim(id3v2.getComment()));
+            metadata.put("tag_composer", safeTrim(id3v2.getComposer()));
+        } else if (mp3File.hasId3v1Tag()) {
+            ID3v1 id3v1 = mp3File.getId3v1Tag();
+            metadata.put("tag_title", safeTrim(id3v1.getTitle()));
+            metadata.put("tag_artist", safeTrim(id3v1.getArtist()));
+            metadata.put("tag_album", safeTrim(id3v1.getAlbum()));
+            metadata.put("tag_year", safeTrim(id3v1.getYear()));
+            metadata.put("tag_genre", safeTrim(id3v1.getGenreDescription()));
+            metadata.put("tag_track", safeTrim(id3v1.getTrack()));
+            metadata.put("tag_comment", safeTrim(id3v1.getComment()));
+            metadata.put("tag_composer", "");
         } else {
             log.warn("[EXTRACTOR] Aucun tag ID3 trouvé dans : {}", filePath);
         }
@@ -137,14 +132,12 @@ public class Mp3ExtractorService {
                     fileMessage.getFilePath(),
                     fileMessage.getFileName(),
                     metadata,
-                    Instant.now().toEpochMilli()
-            );
+                    Instant.now().toEpochMilli());
 
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.MP3_EXCHANGE,
                     RabbitMQConfig.RK_EXTRACTOR_TO_SENDER,
-                    msg
-            );
+                    msg);
 
             log.info("[EXTRACTOR] [{}] Métadonnées publiées dans la queue → [{}]",
                     now, fileMessage.getFileName());
@@ -155,18 +148,10 @@ public class Mp3ExtractorService {
         }
     }
 
-    /** Utilitaire : capture toute exception et retourne "" à la place. */
-    private String safeGet(ThrowingSupplier<String> supplier) {
-        try {
-            String val = supplier.get();
-            return val != null ? val.trim() : "";
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws Exception;
+    /**
+     * Utilitaire pour éviter les NullPointerException sur les chaînes de caractères
+     */
+    private String safeTrim(String val) {
+        return val != null ? val.trim() : "";
     }
 }
