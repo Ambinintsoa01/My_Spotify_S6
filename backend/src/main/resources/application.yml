@@ -1,6 +1,10 @@
 spring:
   application:
     name: mp3-pipeline
+  servlet:
+      multipart:
+        max-file-size: 50MB       # Taille max autorisée par fichier MP3
+        max-request-size: 50MB    # Taille max totale autorisée par requête
 
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
