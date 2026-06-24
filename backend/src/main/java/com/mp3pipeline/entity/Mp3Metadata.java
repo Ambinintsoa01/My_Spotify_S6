@@ -20,6 +20,9 @@ public class Mp3Metadata {
     @Column(name = "file_name", nullable = false)
     private String fileName;
 
+    @Column(name = "file_source", length = 512)
+    private String fileSource;
+
     @Column(name = "file_path", length = 512)
     private String filePath;
 
