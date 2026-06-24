@@ -1,6 +1,22 @@
 spring:
   application:
     name: mp3-pipeline
+  
+  # --- AJOUT CONFIGURATION MYSQL ---
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:my_spotify}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASS:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update # Crée ou met à jour les tables automatiquement au démarrage
+    show-sql: true     # Utile pour voir les requêtes SQL passer dans ton terminal de dev
+    properties:
+      hibernate:
+        format_sql: true
   servlet:
       multipart:
         max-file-size: 50MB       # Taille max autorisée par fichier MP3
