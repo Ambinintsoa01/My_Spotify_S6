@@ -4,10 +4,15 @@ import com.mp3pipeline.entity.Mp3Metadata;
 import com.mp3pipeline.repository.Mp3MetadataRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import java.io.File;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +22,7 @@ import java.util.Map;
 public class Mp3UploadController {
 
     private static final Logger log = LoggerFactory.getLogger(Mp3UploadController.class);
+    private static final String FRONTEND_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\frontend\\src\\mp3-uploaded";
 
     // Injection du repository
     private final Mp3MetadataRepository metadataRepository;
@@ -41,6 +47,31 @@ public class Mp3UploadController {
         } else {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @GetMapping("/mp3s/download/{id}")
+    public ResponseEntity<Resource> downloadMp3(@PathVariable Long id) {
+        log.info("[API] Demande de téléchargement binaire pour le MP3 ID: {}", id);
+
+        Mp3Metadata metadata = metadataRepository.findById(id).orElse(null);
+        if (metadata == null || metadata.getFilePath() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        File file = new File(metadata.getFilePath());
+
+        // CORRECTION / SÉCURITÉ : On vérifie si le fichier existe ET que ce n'est pas
+        // un dossier
+        if (!file.exists() || !file.isFile()) {
+            log.error("[API] Le chemin stocké n'est pas un fichier valide : {}", metadata.getFilePath());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        Resource resource = new FileSystemResource(file);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("audio/mpeg"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
+                .body(resource);
     }
 
     @PostMapping("/upload")
@@ -80,7 +111,8 @@ public class Mp3UploadController {
             // Construction de l'objet à enregistrer en BDD
             Mp3Metadata metadata = Mp3Metadata.builder()
                     .fileName(originalFilename != null ? originalFilename : "Fichier_anonyme.mp3")
-                    .filePath(filePath)
+                    .fileSource(filePath)
+                    .filePath(FRONTEND_DIR + File.separator + (originalFilename != null ? originalFilename : "Fichier_anonyme.mp3"))
                     .title(title)
                     .artist(artist)
                     .album(album)
