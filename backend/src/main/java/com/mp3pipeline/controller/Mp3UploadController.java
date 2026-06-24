@@ -13,7 +13,12 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import java.io.File;
-
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +28,7 @@ public class Mp3UploadController {
 
     private static final Logger log = LoggerFactory.getLogger(Mp3UploadController.class);
     private static final String FRONTEND_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\frontend\\src\\mp3-uploaded";
+    private static final String INBOX_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\backend\\mp3-inbox";
 
     // Injection du repository
     private final Mp3MetadataRepository metadataRepository;
@@ -113,7 +119,8 @@ public class Mp3UploadController {
             Mp3Metadata metadata = Mp3Metadata.builder()
                     .fileName(originalFilename != null ? originalFilename : "Fichier_anonyme.mp3")
                     .fileSource(filePath)
-                    .filePath(FRONTEND_DIR + File.separator + (originalFilename != null ? originalFilename : "Fichier_anonyme.mp3"))
+                    .filePath(FRONTEND_DIR + File.separator
+                            + (originalFilename != null ? originalFilename : "Fichier_anonyme.mp3"))
                     .title(title)
                     .artist(artist)
                     .album(album)
@@ -136,5 +143,51 @@ public class Mp3UploadController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Erreur interne lors de la sauvegarde des métadonnées : " + e.getMessage());
         }
+    }
+
+    @PostMapping("/uploadFront")
+    public ResponseEntity<?> uploadFromFrontend(@RequestParam("files") MultipartFile[] files) {
+        if (files == null || files.length == 0) {
+            return ResponseEntity.badRequest().body("Aucun fichier n'a été fourni.");
+        }
+
+        log.info("[API-FRONT] Début de l'importation de {} fichier(s) vers l'inbox", files.length);
+
+        // S'assurer que le dossier de destination existe
+        File inboxFolder = new File(INBOX_DIR);
+        if (!inboxFolder.exists()) {
+            inboxFolder.mkdirs();
+        }
+
+        List<String> uploadedFilesSummary = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) {
+                continue;
+            }
+
+            String originalFilename = file.getOriginalFilename();
+            if (originalFilename == null) {
+                originalFilename = "track_" + System.currentTimeMillis() + ".mp3";
+            }
+
+            try {
+                // Définir l'emplacement cible exact dans backend/mp3-inbox
+                Path targetLocation = Paths.get(INBOX_DIR).resolve(originalFilename);
+
+                // Copie physique du fichier binaire vers le disque dur
+                Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+                log.info("[API-FRONT] Fichier copié avec succès dans l'inbox : {}", originalFilename);
+                uploadedFilesSummary.add(originalFilename);
+
+            } catch (IOException e) {
+                log.error("[API-FRONT] Échec du stockage pour le fichier : {}", originalFilename, e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Erreur lors de l'écriture du fichier " + originalFilename + " : " + e.getMessage());
+            }
+        }
+
+        return ResponseEntity.ok("Succès : " + uploadedFilesSummary.size() + " fichier(s) placé(s) dans l'inbox.");
     }
 }
