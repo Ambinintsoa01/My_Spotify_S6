@@ -15,22 +15,18 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
  * ══════════════════════════════════════════════════════
- *  PROGRAMME 3 — Sender
+ * PROGRAMME 3 — Sender
  * ══════════════════════════════════════════════════════
- * Consomme les messages de {@code mp3.extractor.to.sender}.
- * Pour chaque message reçu (fichier + métadonnées) :
- *   1. Envoie le fichier .mp3 et ses métadonnées vers l'API HTTP.
- *   2. En cas de succès → délègue la suppression au {@link Mp3CleanerService}.
- *   3. En cas d'échec  → log l'erreur, conserve le fichier.
- *
- * L'envoi se fait en multipart/form-data :
- *   - Part "file"     : le fichier binaire .mp3
- *   - Part "metadata" : JSON des métadonnées
  */
 @Service
 public class Mp3SenderService {
@@ -38,16 +34,19 @@ public class Mp3SenderService {
     private static final Logger log = LoggerFactory.getLogger(Mp3SenderService.class);
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    // Chemin absolu de destination dans le dossier public/src du frontend React
+    private static final String FRONTEND_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\frontend\\src\\mp3-uploaded";
+
     private final PipelineProperties props;
-    private final RestTemplate        restTemplate;
-    private final Mp3CleanerService   cleaner;
+    private final RestTemplate restTemplate;
+    private final Mp3CleanerService cleaner;
 
     public Mp3SenderService(PipelineProperties props,
-                            RestTemplate restTemplate,
-                            Mp3CleanerService cleaner) {
-        this.props        = props;
+            RestTemplate restTemplate,
+            Mp3CleanerService cleaner) {
+        this.props = props;
         this.restTemplate = restTemplate;
-        this.cleaner      = cleaner;
+        this.cleaner = cleaner;
     }
 
     /**
@@ -64,7 +63,18 @@ public class Mp3SenderService {
         now = LocalDateTime.now().format(FMT);
         if (success) {
             log.info("[SENDER] [{}] Envoi réussi : {}", now, message.getFileName());
-            cleaner.deleteFile(message.getFilePath(), message.getFileName());
+
+            // ── ÉTAPE INTERMÉDIAIRE : Copie vers le frontend avant suppression ──
+            boolean copied = copyToFrontend(message.getFilePath(), message.getFileName());
+
+            if (copied) {
+                // Si la copie a fonctionné, on peut nettoyer la boîte de réception (inbox) du
+                // backend
+                cleaner.deleteFile(message.getFilePath(), message.getFileName());
+            } else {
+                log.warn("[SENDER] [{}] Abandon de la suppression car la copie vers le frontend a échoué : {}",
+                        now, message.getFileName());
+            }
         } else {
             log.warn("[SENDER] [{}] Envoi échoué, fichier conservé : {}",
                     now, message.getFileName());
@@ -72,9 +82,40 @@ public class Mp3SenderService {
     }
 
     /**
+     * Copie le fichier MP3 traité vers le répertoire source du Frontend React.
+     */
+    private boolean copyToFrontend(String sourceFilePath, String fileName) {
+        String now = LocalDateTime.now().format(FMT);
+
+        Path source = Paths.get(sourceFilePath);
+        Path targetDir = Paths.get(FRONTEND_DIR);
+        Path targetFile = targetDir.resolve(fileName);
+
+        try {
+            // Créer les répertoires parents du frontend s'ils n'existent pas encore
+            if (!Files.exists(targetDir)) {
+                Files.createDirectories(targetDir);
+                log.info("[SENDER] [{}] Création du répertoire destination frontend : {}", now, FRONTEND_DIR);
+            }
+
+            log.info("[SENDER] [{}] Copie du fichier vers le frontend en cours... -> {}", now, targetFile.toString());
+
+            // Copie avec écrasement si le fichier existe déjà
+            // (StandardCopyOption.REPLACE_EXISTING)
+            Files.copy(source, targetFile, StandardCopyOption.REPLACE_EXISTING);
+
+            log.info("[SENDER] [{}] Fichier copié avec succès vers le frontend : {}", now, fileName);
+            return true;
+
+        } catch (IOException e) {
+            log.error("[SENDER] [{}] Échec de la copie vers le frontend pour '{}' : {}",
+                    now, fileName, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
      * Envoie le fichier .mp3 + ses métadonnées à l'API en multipart/form-data.
-     *
-     * @return true si la réponse HTTP est 2xx, false sinon.
      */
     private boolean sendToApi(Mp3MetadataMessage message) {
         String now = LocalDateTime.now().format(FMT);
@@ -88,17 +129,11 @@ public class Mp3SenderService {
         }
 
         try {
-            // ── Construction du corps multipart ───────────────────────────────
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-
-            // Part 1 : fichier binaire
             body.add("file", new FileSystemResource(file));
-
-            // Part 2 : métadonnées au format JSON (string brut)
             body.add("fileName", message.getFileName());
             body.add("filePath", message.getFilePath());
 
-            // Ajoute chaque métadonnée comme champ de formulaire
             if (message.getMetadata() != null) {
                 message.getMetadata().forEach(body::add);
             }
@@ -106,14 +141,13 @@ public class Mp3SenderService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-            HttpEntity<MultiValueMap<String, Object>> requestEntity =
-                    new HttpEntity<>(body, headers);
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
             log.info("[SENDER] [{}] Envoi HTTP vers {} — fichier : {}",
                     now, apiUrl, message.getFileName());
 
-            ResponseEntity<String> response =
-                    restTemplate.exchange(apiUrl, HttpMethod.POST, requestEntity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, requestEntity,
+                    String.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("[SENDER] [{}] Réponse API {} pour : {}",
