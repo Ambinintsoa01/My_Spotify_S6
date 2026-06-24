@@ -1,77 +1,90 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Btn, Badge, Empty, Toast, Modal } from "../components/ui";
-import { MOCK_PLAYLISTS, formatDuration } from "../hooks/useMockData";
+import { formatDuration } from "../hooks/useMockData";
 import { usePlayer } from "../context/PlayerContext";
 
+const API_BASE_URL = "http://localhost:8080/api/playlists";
+
 function PlaylistCard({ playlist, onOpen, onPlay, onDelete }) {
-  const [hov, setHov]   = useState(false);
+  const [hov, setHov] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const totalMin = Math.round(playlist.totalDurationSecs / 60);
+  const totalMin = Math.round((playlist.totalDurationSecs || 0) / 60);
 
   return (
     <>
       <div
-        onMouseEnter={()=>setHov(true)}
-        onMouseLeave={()=>setHov(false)}
-        style={{ background:"var(--bg-card)", border:`1px solid ${hov?"rgba(124,58,237,0.35)":"var(--border)"}`,
-          borderRadius:"var(--radius-lg)", padding:20, cursor:"pointer",
-          transition:"all var(--transition)", transform: hov?"translateY(-3px)":"none",
-          boxShadow: hov?"0 8px 32px rgba(124,58,237,0.12)":"none" }}>
-
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        style={{
+          background: "var(--bg-card)",
+          border: `1px solid ${hov ? "rgba(124,58,237,0.35)" : "var(--border)"}`,
+          borderRadius: "var(--radius-lg)",
+          padding: 20,
+          cursor: "pointer",
+          transition: "all var(--transition)",
+          transform: hov ? "translateY(-3px)" : "none",
+          boxShadow: hov ? "0 8px 32px rgba(124,58,237,0.12)" : "none"
+        }}
+        onClick={onOpen}
+      >
         {/* Cover placeholder */}
-        <div style={{ width:"100%", aspectRatio:"1", borderRadius:"var(--radius-md)", marginBottom:16,
-          background:"linear-gradient(135deg,var(--violet)22,var(--violet)66)",
-          display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg,#7C3AED44,#A78BFA22)" }} />
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="3"/><path d="M12 9V5l4 1"/><circle cx="12" cy="12" r="9"/>
-          </svg>
+        <div style={{
+          width: "100%", aspectRatio: "1", borderRadius: "var(--radius-md)", marginBottom: 16,
+          background: "linear-gradient(135deg, var(--violet) 0%, var(--violet-light) 100%)",
+          display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden"
+        }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.05)" }} />
+          <span style={{ fontSize: 42, transform: hov ? "scale(1.1)" : "none", transition: "transform var(--transition)" }}>🎧</span>
+
+          {/* Hover play overlay */}
           {hov && (
-            <button onClick={e=>{e.stopPropagation();onPlay(playlist);}}
-              style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center",
-                justifyContent:"center", border:"none", cursor:"pointer", borderRadius:"var(--radius-md)" }}>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:"var(--green)",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                boxShadow:"0 4px 20px rgba(16,185,129,0.5)" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onPlay(); }}
+              style={{
+                position: "absolute", bottom: 12, right: 12, width: 42, height: 42,
+                borderRadius: "50%", background: "var(--bg-primary)", color: "var(--violet)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)", display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 16, fontWeight: "bold", border: "none"
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.05)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "none"}
+            >
+              ▶
             </button>
           )}
         </div>
 
-        <div onClick={()=>onOpen(playlist.id)}>
-          <p style={{ fontSize:14, fontWeight:700, color:"var(--text-primary)", marginBottom:4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{playlist.name}</p>
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
-            <Badge color="muted">{playlist.trackCount} pistes</Badge>
-            <Badge color="violet">~{totalMin} min</Badge>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+              {playlist.name}
+            </h3>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+              style={{ background: "none", color: "var(--text-muted)", border: "none", fontSize: 14, padding: "2px 4px", opacity: hov ? 1 : 0, transition: "opacity var(--transition)" }}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
+            >
+              🗑️
+            </button>
           </div>
-          <p style={{ fontSize:11, color:"var(--text-muted)" }}>{new Date(playlist.createdAt).toLocaleDateString("fr")}</p>
-        </div>
-
-        <div style={{ display:"flex", gap:8, marginTop:14, opacity: hov?1:0, transition:"opacity var(--transition)" }}>
-          <Btn variant="secondary" size="sm" style={{ flex:1 }} onClick={e=>{e.stopPropagation();onOpen(playlist.id);}}>Détails</Btn>
-          <Btn variant="amber" size="sm" style={{ flex:1 }} onClick={e=>{e.stopPropagation();}}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            ZIP
-          </Btn>
-          <button onClick={e=>{e.stopPropagation();setConfirmDelete(true);}}
-            title="Supprimer" style={{ background:"var(--red-dim)", border:"1px solid rgba(239,68,68,0.2)",
-              color:"var(--red)", padding:"6px 10px", borderRadius:"var(--radius-sm)", cursor:"pointer" }}
-            onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.22)"}
-            onMouseLeave={e=>e.currentTarget.style.background="var(--red-dim)"}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          </button>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {playlist.description || "Aucune description"}
+          </p>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <Badge color="muted">{playlist.tracks?.length || 0} titres</Badge>
+            <Badge color="primary">{totalMin} min</Badge>
+          </div>
         </div>
       </div>
 
-      <Modal open={confirmDelete} onClose={()=>setConfirmDelete(false)} title="Supprimer la playlist" width={380}>
-        <p style={{ fontSize:14, color:"var(--text-secondary)", lineHeight:1.6, marginBottom:20 }}>
-          Voulez-vous vraiment supprimer <strong style={{color:"var(--text-primary)"}}>{playlist.name}</strong> ?<br/>
-          Cette action est irréversible.
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Supprimer la playlist" width={360}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>
+          Voulez-vous supprimer la playlist <strong>{playlist.name}</strong> ? Cette action est irréversible.
         </p>
-        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-          <Btn variant="secondary" onClick={()=>setConfirmDelete(false)}>Annuler</Btn>
-          <Btn variant="danger" onClick={()=>{ setConfirmDelete(false); onDelete(playlist.id); }}>Supprimer</Btn>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="secondary" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
+          <Btn variant="danger" onClick={() => { onDelete(); setConfirmDelete(false); }}>Supprimer</Btn>
         </div>
       </Modal>
     </>
@@ -80,47 +93,94 @@ function PlaylistCard({ playlist, onOpen, onPlay, onDelete }) {
 
 export default function MyPlaylists({ navigate }) {
   const { play } = usePlayer();
-  const [playlists, setPlaylists] = useState(MOCK_PLAYLISTS);
+  const [playlists, setPlaylists] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
-  const handleDelete = (id) => {
-    setPlaylists(p=>p.filter(pl=>pl.id!==id));
-    setToast({ message:"Playlist supprimée", type:"success" });
+  const fetchPlaylists = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(API_BASE_URL);
+      if (res.ok) {
+        const data = await res.json();
+        setPlaylists(data);
+      } else {
+        setToast({ message: "Erreur lors du chargement des playlists", type: "error" });
+      }
+    } catch (err) {
+      setToast({ message: "Impossible de contacter le serveur", type: "error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const total = playlists.reduce((a,p)=>a+p.totalDurationSecs,0);
+  useEffect(() => {
+    fetchPlaylists();
+  }, []);
+
+  const handleDelete = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setPlaylists(prev => prev.filter(p => p.id !== id));
+        setToast({ message: "Playlist supprimée avec succès", type: "success" });
+      } else {
+        setToast({ message: "Impossible de supprimer la playlist", type: "error" });
+      }
+    } catch (err) {
+      setToast({ message: "Erreur réseau lors de la suppression", type: "error" });
+    }
+  };
+
+  const handlePlayPlaylist = (playlist) => {
+    if (!playlist.tracks || playlist.tracks.length === 0) {
+      setToast({ message: "Cette playlist est vide !", type: "error" });
+      return;
+    }
+    const tracksToPlay = playlist.tracks.map(t => t.mp3Metadata);
+    play(tracksToPlay, 0);
+  };
+
+  const totalSecs = playlists.reduce((acc, p) => acc + (p.totalDurationSecs || 0), 0);
+
+  if (loading) {
+    return <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Chargement des playlists...</div>;
+  }
 
   return (
-    <div style={{ padding:"32px 36px", animation:"fadeIn 0.2s ease" }}>
-      {toast && <Toast {...toast} onClose={()=>setToast(null)} />}
+    <div style={{ padding: "32px 36px" }}>
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24 }}>
-        <div style={{ display:"flex", gap:12 }}>
-          <div style={{ background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:"var(--radius-md)", padding:"10px 18px" }}>
-            <p style={{ fontSize:18, fontWeight:700, fontFamily:"'Space Grotesk',sans-serif", color:"var(--text-primary)" }}>{playlists.length}</p>
-            <p style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Playlists</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 18px" }}>
+            <p style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: "var(--text-primary)" }}>{playlists.length}</p>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Playlists</p>
           </div>
-          <div style={{ background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:"var(--radius-md)", padding:"10px 18px" }}>
-            <p style={{ fontSize:18, fontWeight:700, fontFamily:"'Space Grotesk',sans-serif", color:"var(--text-primary)" }}>{formatDuration(total)}</p>
-            <p style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Durée totale</p>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "10px 18px" }}>
+            <p style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: "var(--text-primary)" }}>{formatDuration(totalSecs)}</p>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Durée totale</p>
           </div>
         </div>
-        <Btn variant="primary" onClick={()=>navigate("create")}
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>}>
+        <Btn variant="primary" onClick={() => navigate("create")}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" /></svg>}>
           Nouvelle playlist
         </Btn>
       </div>
 
       {playlists.length === 0 ? (
-        <Empty icon="🎧" title="Aucune playlist" subtitle="Créez votre première playlist à partir de vos fichiers MP3."
-          action={<Btn variant="primary" onClick={()=>navigate("create")}>Créer une playlist</Btn>} />
+        <Empty icon="🎧" title="Aucune playlist" subtitle="Créez votre première playlist personnalisée dès maintenant."
+          action={<Btn variant="primary" onClick={() => navigate("create")}>Créer une playlist</Btn>} />
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:16 }}>
-          {playlists.map(pl=>(
-            <PlaylistCard key={pl.id} playlist={pl}
-              onOpen={id=>navigate("playlist",id)}
-              onPlay={pl=>play(pl.tracks,0)}
-              onDelete={handleDelete} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+          {playlists.map(pl => (
+            <PlaylistCard
+              key={pl.id}
+              playlist={pl}
+              onOpen={() => navigate("playlist", pl.id)}
+              onPlay={() => handlePlayPlaylist(pl)}
+              onDelete={() => handleDelete(pl.id)}
+            />
           ))}
         </div>
       )}
