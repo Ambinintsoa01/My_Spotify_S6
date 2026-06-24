@@ -5,73 +5,122 @@ import { usePlayer } from "../context/PlayerContext";
 
 const API_BASE_URL = "http://localhost:8080/api";
 
-function UploadModal({ open, onClose, onAdd }) {
+function UploadModal({ open, onClose, onRefresh }) {
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
   const handleDrop = (e) => {
-    e.preventDefault(); setDragging(false);
+    e.preventDefault();
+    setDragging(false);
     const dropped = [...e.dataTransfer.files].filter(f => f.name.endsWith(".mp3"));
     setFiles(prev => [...prev, ...dropped]);
   };
 
   const handleSubmit = async () => {
+    if (files.length === 0) return;
+
     setUploading(true);
-    // Simule l'import ou appelle une logique locale si nécessaire
-    await new Promise(r => setTimeout(r, 1200));
-    files.forEach(f => onAdd({
-      id: Date.now() + Math.random(),
-      fileName: f.name,
-      title: f.name.replace(".mp3", ""),
-      artist: "Inconnu",
-      genre: "Inconnu",
-      year: "",
-      durationSeconds: Math.floor(Math.random() * 300 + 60)
-    }));
-    setUploading(false); setFiles([]); onClose();
+    const formData = new FormData();
+
+    // On ajoute chaque fichier dans l'objet FormData avec la clé "files" attendue par Spring Boot
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/uploadFront`, {
+        method: "POST",
+        body: formData, // Le navigateur configure automatiquement le Content-Type en multipart/form-data
+      });
+
+      if (response.ok) {
+        console.log("[Front-Upload] Fichiers téléversés avec succès vers l'inbox.");
+        setFiles([]);
+        onClose();
+        // Optionnel : Déclencher un rafraîchissement si ton pipeline traite instantanément les fichiers
+        if (onRefresh) onRefresh();
+      } else {
+        const errorText = await response.text();
+        alert("Erreur lors de l'import : " + errorText);
+      }
+    } catch (error) {
+      console.error("Erreur réseau lors de l'upload:", error);
+      alert("Impossible de joindre le serveur backend.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Importer des fichiers MP3">
+    <Modal open={open} onClose={onClose} title="Importer des fichiers MP3 (Inbox)" width={500}>
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         style={{
-          border: `2px dashed ${dragging ? "var(--violet)" : "var(--border)"}`, borderRadius: "var(--radius-lg)",
-          padding: "40px 24px", textAlign: "center", cursor: "pointer", transition: "all var(--transition)",
-          background: dragging ? "var(--violet-dim)" : "transparent"
+          border: `2px dashed ${dragging ? "var(--violet)" : "var(--border)"}`,
+          borderRadius: "var(--radius-lg)",
+          padding: "40px 20px",
+          textAlign: "center",
+          background: dragging ? "var(--violet-dim)" : "var(--bg-card)",
+          transition: "all var(--transition)",
+          marginBottom: 20
         }}
-        onClick={() => document.getElementById("fileInput").click()}
       >
-        <input id="fileInput" type="file" accept=".mp3" multiple hidden onChange={e => setFiles(prev => [...prev, ...e.target.files])} />
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🎵</div>
-        <p style={{ color: "var(--text-secondary)", fontSize: 14, fontWeight: 500 }}>Glissez vos fichiers MP3 ici</p>
-        <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4 }}>ou cliquez pour parcourir</p>
+        <span style={{ fontSize: 40, display: "block", marginBottom: 12 }}>📥</span>
+        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
+          Glissez-déposez vos fichiers MP3 ici
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          Ils seront directement transférés dans le dossier de traitement automatique.
+        </p>
+
+        <input
+          type="file"
+          multiple
+          accept=".mp3"
+          id="fileInput"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const selected = [...e.target.files].filter(f => f.name.endsWith(".mp3"));
+            setFiles(prev => [...prev, ...selected]);
+          }}
+        />
+        <label
+          htmlFor="fileInput"
+          style={{
+            display: "inline-block",
+            marginTop: 16,
+            padding: "6px 12px",
+            background: "var(--bg-hover)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            fontSize: 12,
+            cursor: "pointer",
+            color: "var(--text-primary)"
+          }}
+        >
+          Parcourir les fichiers
+        </label>
       </div>
 
       {files.length > 0 && (
-        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ marginBottom: 20, maxHeight: 150, overflowY: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--text-secondary)" }}>Fichiers prêts ({files.length}) :</p>
           {files.map((f, i) => (
-            <div key={i} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-              background: "var(--bg-elevated)", borderRadius: "var(--radius-sm)"
-            }}>
-              <span style={{ fontSize: 16 }}>🎵</span>
-              <span style={{ fontSize: 13, color: "var(--text-primary)", flex: 1 }}>{f.name}</span>
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatSize(f.size)}</span>
-              <button onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", color: "var(--text-muted)", fontSize: 16 }}>×</button>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", color: "var(--text-primary)" }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "80%" }}>{f.name}</span>
+              <span style={{ color: "var(--text-muted)" }}>{formatSize(f.size)}</span>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
-        <Btn variant="secondary" onClick={onClose}>Annuler</Btn>
-        <Btn variant="primary" onClick={handleSubmit} disabled={files.length === 0 || uploading}
-          icon={uploading ? <Spinner size={14} color="white" /> : null}>
-          {uploading ? "Import en cours…" : `Importer (${files.length})`}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <Btn variant="secondary" onClick={onClose} disabled={uploading}>Annuler</Btn>
+        <Btn variant="primary" onClick={handleSubmit} disabled={uploading || files.length === 0}>
+          {uploading ? <Spinner size={14} color="white" /> : "Envoyer à l'inbox"}
         </Btn>
       </div>
     </Modal>
@@ -301,8 +350,12 @@ export default function Mp3Library() {
         </div>
       )}
 
-      <UploadModal open={showUpload} onClose={() => setShowUpload(false)}
-        onAdd={m => { setMp3s(p => [...p, m]); setToast({ message: "Fichier simulé", type: "success" }); }} />
+      {/* Modifie cette ligne à la fin du rendu de ton composant Mp3Library */}
+      <UploadModal
+        open={showUpload}
+        onClose={() => setShowUpload(false)}
+        onRefresh={fetchMp3s} // Permet de rafraîchir la liste une fois l'upload terminé
+      />
       <MetaModal mp3={metaTrack} open={!!metaTrack} onClose={() => setMetaTrack(null)} />
       <EditModal mp3={editTrack} open={!!editTrack} onClose={() => setEditTrack(null)}
         onSave={updated => { setMp3s(p => p.map(m => m.id === updated.id ? { ...m, ...updated } : m)); setToast({ message: "Tags mis à jour", type: "success" }); }} />
