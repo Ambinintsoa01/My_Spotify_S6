@@ -3,3 +3,4 @@ backend/startup.md
 backend/logs/mp3-pipeline.log
 /frontend/node_modules
 /.idea
+/backend/mp3-inbox
