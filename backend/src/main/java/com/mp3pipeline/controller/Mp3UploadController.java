@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,6 +23,24 @@ public class Mp3UploadController {
 
     public Mp3UploadController(Mp3MetadataRepository metadataRepository) {
         this.metadataRepository = metadataRepository;
+    }
+
+    @GetMapping("/mp3s")
+    public ResponseEntity<List<Mp3Metadata>> getAllMp3s() {
+        log.info("[API-TARGET] Demande de récupération de tous les MP3 de la BDD");
+        List<Mp3Metadata> list = metadataRepository.findAll();
+        return ResponseEntity.ok(list);
+    }
+
+    @DeleteMapping("/mp3s/{id}")
+    public ResponseEntity<Void> deleteMp3(@PathVariable Long id) {
+        log.info("[API-TARGET] Demande de suppression du MP3 ID: {}", id);
+        if (metadataRepository.existsById(id)) {
+            metadataRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @PostMapping("/upload")
