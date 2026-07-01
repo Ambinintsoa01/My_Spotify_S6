@@ -27,8 +27,8 @@ import java.util.Map;
 public class Mp3UploadController {
 
     private static final Logger log = LoggerFactory.getLogger(Mp3UploadController.class);
-    private static final String FRONTEND_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\frontend\\src\\mp3-uploaded";
-    private static final String INBOX_DIR = "D:\\Ambinintsoa\\ITU\\Mr_Naina\\My_Spotify_S6\\backend\\mp3-inbox";
+    private static final String FRONTEND_DIR = "D:\\Github\\My_Spotify_S6\\frontend\\src\\mp3-uploaded";
+    private static final String INBOX_DIR = "D:\\Github\\My_Spotify_S6\\backend\\mp3-inbox";
 
     // Injection du repository
     private final Mp3MetadataRepository metadataRepository;
