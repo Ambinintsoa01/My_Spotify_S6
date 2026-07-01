@@ -43,7 +43,7 @@ public class Mp3ExtractorService {
     /**
      * Listener RabbitMQ : un message = un fichier .mp3 à traiter.
      */
-    @RabbitListener(queues = RabbitMQConfig.QUEUE_WATCHER_TO_EXTRACTOR)
+    @RabbitListener(queues = RabbitMQConfig.QUEUE_WATCHER_TO_EXTRACTOR_WORK)
     public void onMp3FileReceived(Mp3FileMessage message) {
         String now = LocalDateTime.now().format(FMT);
         log.info("[EXTRACTOR] [{}] Message reçu — début extraction : {}",
