@@ -77,7 +77,7 @@ public class Mp3WatcherService {
         try (Stream<Path> stream = Files.list(inboxPath)) {
             mp3Files = stream
                     .filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".mp3"))
+                    .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".mp3") || p.getFileName().toString().toLowerCase().endsWith(".MP3"))
                     .collect(Collectors.toList());
         } catch (IOException e) {
             log.error("[WATCHER] [{}] Erreur lors du scan du répertoire '{}' : {}",

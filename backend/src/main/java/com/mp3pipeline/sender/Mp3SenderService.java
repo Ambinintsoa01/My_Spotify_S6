@@ -67,8 +67,8 @@ public class Mp3SenderService {
         log.info("[SENDER] [{}] Message reçu — vérification en cours : {}", now, message.getFileName());
 
         // ── ÉTAPE DURÉE MAX ──
-        if (isDurationAboveLimit(message, 180)) {
-            log.warn("[SENDER] [{}] [DUREE] Fichier '{}' ignoré: durée > 180s. Fichier conservé dans l'inbox.",
+        if (isDurationAboveLimit(message, 360)) {
+            log.warn("[SENDER] [{}] [DUREE] Fichier '{}' ignoré: durée > 360s. Fichier conservé dans l'inbox.",
                     now, message.getFileName());
             // Retour direct: pas d'envoi API, pas de copie frontend, pas de suppression inbox.
             return;
