@@ -13,7 +13,7 @@ function UploadModal({ open, onClose, onRefresh }) {
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
-    const dropped = [...e.dataTransfer.files].filter(f => f.name.endsWith(".mp3"));
+    const dropped = [...e.dataTransfer.files].filter(f => f.name.endsWith(".mp3") || f.name.endsWith(".MP3"));
     setFiles(prev => [...prev, ...dropped]);
   };
 
@@ -79,11 +79,11 @@ function UploadModal({ open, onClose, onRefresh }) {
         <input
           type="file"
           multiple
-          accept=".mp3"
+          accept=".mp3, .MP3"
           id="fileInput"
           style={{ display: "none" }}
           onChange={(e) => {
-            const selected = [...e.target.files].filter(f => f.name.endsWith(".mp3"));
+            const selected = [...e.target.files].filter(f => f.name.endsWith(".mp3") || f.name.endsWith(".MP3"));
             setFiles(prev => [...prev, ...selected]);
           }}
         />
