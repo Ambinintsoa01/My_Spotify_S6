@@ -51,7 +51,8 @@ export default function CreatePlaylist({ navigate }) {
   // États du formulaire
   const [playlistName, setPlaylistName] = useState("");
   const [description, setDescription] = useState("");
-  const [criteria, setCriteria] = useState({ genre: "", artist: "", album: "", year: "", maxTracks: 20 });
+  const [filterMode, setFilterMode] = useState("include");
+  const [criteria, setCriteria] = useState({ genre: "", artist: "", album: "", year: "", maxTracks: 20, maxDurationMinutes: "" });
   const [generated, setGenerated] = useState(null);
 
   // UI États
@@ -88,23 +89,43 @@ export default function CreatePlaylist({ navigate }) {
     setGenerating(true);
     await new Promise(r => setTimeout(r, 800)); // Petit effet de chargement sympa
 
-    // Filtrer localement les MP3 qui correspondent aux critères
-    let pool = allMp3s.filter(m => {
+    // Filtrer localement les MP3 selon le mode Inclure / Exclure.
+    const matchesCriteria = (m) => {
       if (criteria.genre && m.genre !== criteria.genre) return false;
       if (criteria.artist && m.artist !== criteria.artist) return false;
       if (criteria.album && m.album !== criteria.album) return false;
       if (criteria.year && String(m.year) !== String(criteria.year)) return false;
       return true;
+    };
+
+    let pool = allMp3s.filter((m) => {
+      const matches = matchesCriteria(m);
+      return filterMode === "exclude" ? !matches : matches;
     });
 
     // Mélanger aléatoirement le résultat
     pool = pool.sort(() => 0.5 - Math.random());
 
-    // Appliquer la limite du nombre de pistes maximum
-    const limit = parseInt(criteria.maxTracks) || 20;
-    const finalTracks = pool.slice(0, limit);
+    // Appliquer les limites: nombre de pistes + durée totale maximale.
+    const maxTracks = parseInt(criteria.maxTracks) || 20;
+    const maxDurationMinutes = parseInt(criteria.maxDurationMinutes);
+    const maxDurationSeconds = Number.isFinite(maxDurationMinutes) && maxDurationMinutes > 0
+      ? maxDurationMinutes * 60
+      : null;
 
-    const totalDur = finalTracks.reduce((acc, t) => acc + (t.durationSeconds || 0), 0);
+    const finalTracks = [];
+    let totalDur = 0;
+    for (const track of pool) {
+      if (finalTracks.length >= maxTracks) break;
+
+      const trackDur = track.durationSeconds || 0;
+      if (maxDurationSeconds !== null && totalDur + trackDur > maxDurationSeconds) {
+        continue;
+      }
+
+      finalTracks.push(track);
+      totalDur += trackDur;
+    }
 
     setGenerated({
       tracks: finalTracks,
@@ -225,6 +246,17 @@ export default function CreatePlaylist({ navigate }) {
 
           <Field label="Nombre maximal de pistes">
             <input type="number" min="1" max="100" value={criteria.maxTracks} onChange={e => setCriteria({ ...criteria, maxTracks: e.target.value })} />
+          </Field>
+
+          <Field label="Durée max playlist (minutes)">
+            <input type="number" min="1" max="600" value={criteria.maxDurationMinutes} onChange={e => setCriteria({ ...criteria, maxDurationMinutes: e.target.value })} placeholder="Ex: 30" />
+          </Field>
+
+          <Field label="Mode de filtrage">
+            <select value={filterMode} onChange={e => setFilterMode(e.target.value)} style={{ width: "100%", background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "8px 12px", color: "var(--text-primary)", fontSize: 13 }}>
+              <option value="include">Inclure (par defaut)</option>
+              <option value="exclude">Exclure</option>
+            </select>
           </Field>
 
           <Btn variant="secondary" onClick={handleGenerate} disabled={generating} style={{ marginTop: 8 }} icon={generating ? <Spinner size={14} /> : null}>
