@@ -1,0 +1,10 @@
+# Blacklist MP3 pipeline
+# Format:
+# [artists] = chanteurs/artistes interdits
+# [genres]  = genres interdits
+# Lignes vides et lignes commencant par # sont ignorees.
+
+[artists]
+Jeneraly
+
+[genres]
